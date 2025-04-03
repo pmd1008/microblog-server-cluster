@@ -3,6 +3,7 @@ stages:
 
 
 build:
+  image: docker:latest
   stage: build
   tags:
     - docker
