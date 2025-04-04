@@ -1,15 +1,14 @@
-version: "3.8"
 services:
   microblog:
     image: 10.3.1.10:5000/microblog:latest
     ports:
-      - "5000:5000"  # Настрой под своё приложение
+      - "8080:5000"   
     deploy:
       mode: replicated
-      replicas: 2  # 2 экземпляра
+      replicas: 2 
       placement:
         constraints:
-          - node.role != manager  # Опционально: только на worker-нодах
+          - node.role != manager
       restart_policy:
         condition: on-failure
     networks:
