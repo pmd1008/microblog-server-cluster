@@ -4,11 +4,8 @@ stages:
 build_image:
   stage: build
   image: docker:20.10.16
-  services:
-    - docker:dind
   variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
+    DOCKER_TLS_CERTDIR: "" # Отключаем TLS, если не нужно
   script:
     - docker build -t 10.3.1.10:5000/my-app:latest .
     - docker push 10.3.1.10:5000/my-app:latest
