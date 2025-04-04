@@ -1,0 +1,20 @@
+version: "3.8"
+services:
+  microblog:
+    image: 10.3.1.10:5000/microblog:latest
+    ports:
+      - "8080:443"  # Настрой под своё приложение
+    deploy:
+      mode: replicated
+      replicas: 3  # 3 экземпляра
+      placement:
+        constraints:
+          - node.role != manager  # Опционально: только на worker-нодах
+      restart_policy:
+        condition: on-failure
+    networks:
+      - microblog-net
+
+networks:
+  microblog-net:
+    driver: overlay
