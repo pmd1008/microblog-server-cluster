@@ -15,7 +15,7 @@ deploy_to_swarm:
   stage: deploy
   image: docker:20.10.16
   script:
-    - docker service ls | grep my-app || docker service create --name my-app --replicas 3 -p 8080:80 10.3.1.10:5000/microblog:latest
+    - docker service ls | grep my-app || docker service create --name microblog --replicas 3 -p 8080:80 10.3.1.10:5000/microblog:latest
     - docker service update --image 10.3.1.10:5000/microblog:latest my-app
   tags:
     - docker
