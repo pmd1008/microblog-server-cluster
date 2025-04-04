@@ -6,7 +6,7 @@ services:
       - "5000:5000"  # Настрой под своё приложение
     deploy:
       mode: replicated
-      replicas: 2  # 3 экземпляра
+      replicas: 2  # 2 экземпляра
       placement:
         constraints:
           - node.role != manager  # Опционально: только на worker-нодах
