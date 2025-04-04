@@ -1,16 +1,16 @@
 stages:
   - build
 
-
-build:
-  image: docker:latest
+build_image:
   stage: build
+  image: docker:20.10.16
+  services:
+    - docker:dind
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  script:
+    - docker build -t 10.3.1.10:5000/my-app:latest .
+    - docker push 10.3.1.10:5000/my-app:latest
   tags:
     - docker
-  variables:
-    DOCKER_HOST: "unix:///var/run/docker.sock"
-  script:
-    - echo $DOCKER_HOST
-    - docker info
-    - docker build -t 192.168.1.10:5000/microblog:latest .
-    - docker push 192.168.1.10:5000/microblog:latest
