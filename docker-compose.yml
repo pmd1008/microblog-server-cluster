@@ -11,7 +11,7 @@ services:
       placement:
         constraints:
           - node.role != manager
-      update_congig:
+      update_config:
         paralellelixm: 1
         delay: 10s
       restart_policy:
