@@ -12,7 +12,7 @@ services:
         constraints:
           - node.role != manager
       update_config:
-        paralellelixm: 1
+        paralellelism: 1
         delay: 10s
       restart_policy:
         condition: on-failure
