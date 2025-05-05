@@ -4,7 +4,7 @@ services:
   microblog:
     image: 10.3.1.10:5050/microblog:latest
     ports:
-      - "5050:5050"   
+      - "5000:5000"   
     deploy:
       mode: replicated
       replicas: 3 
