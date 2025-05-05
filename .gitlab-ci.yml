@@ -6,8 +6,8 @@ build_image:
   stage: build
   image: docker:20.10.16
   script:
-    - docker build -t 10.3.1.10:5000/microblog:latest .
-    - docker push 10.3.1.10:5000/microblog:latest
+    - docker build -t 10.3.1.10:5050/microblog:latest .
+    - docker push 10.3.1.10:5050/microblog:latest
   tags:
     - docker
 
