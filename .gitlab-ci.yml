@@ -8,8 +8,10 @@ build_image:
   script:
     - docker build -t 10.3.1.10:5050/microblog:latest .
     - docker build -f Dockerfile-nginx -t 10.3.1.10:5050/nginx:latest .
+    - docker build -f Dockerfile-prometheus -t 10.3.1.10:5050/prometheus:latest .
     - docker push 10.3.1.10:5050/microblog:latest
     - docker push 10.3.1.10:5050/nginx:latest
+    - docker push 10.3.1.10:5050/prometheus:latest
   tags:
     - docker
   only:

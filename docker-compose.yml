@@ -24,23 +24,8 @@ services:
     networks:
       - microblog-net
 
-  nginx:
-    image: 10.3.1.10:5050/nginx:latest
-    ports:
-      - "443:443"
-      - "9090:9090" # Prometheus
-      - "3000:3000" # Grafana
-    deploy:
-      placement:
-        constraints:
-          - node.role == manager
-    networks:
-      - microblog-net
-
   prometheus:
-    image: prom/prometheus:latest
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    image: 10.3.1.10:5050/prometheus:latest
     deploy:
       placement:
         constraints:
@@ -53,6 +38,23 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+    networks:
+      - microblog-net
+
+  nginx:
+    image: 10.3.1.10:5050/nginx:latest
+    ports:
+      - "443:443"
+      - "9090:9090" # Prometheus
+      - "3000:3000" # Grafana
+    depends_on:
+      - microblog
+      - prometheus
+      - grafana
     deploy:
       placement:
         constraints:
