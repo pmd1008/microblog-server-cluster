@@ -7,9 +7,13 @@ build_image:
   image: docker:20.10.16
   script:
     - docker build -t 10.3.1.10:5050/microblog:latest .
+    - docker build -f Dockerfile-nginx -t 10.3.1.10:5050/nginx:latest .
     - docker push 10.3.1.10:5050/microblog:latest
+    - docker push 10.3.1.10:5050/nginx:latest
   tags:
     - docker
+  only:
+    - cluster-stack
 
 deploy_to_swarm:
   stage: deploy
@@ -18,3 +22,5 @@ deploy_to_swarm:
     - docker stack deploy -c docker-compose.yml microblog-stack
   tags:
     - docker
+  only:
+    - cluster-stack
