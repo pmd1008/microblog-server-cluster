@@ -25,9 +25,7 @@ services:
       - microblog-net
 
   nginx:
-    build:
-      context: .
-      dockerfile: Dockerfile-nginx
+    image: 10.3.1.10:5050/nginx:latest
     ports:
       - "443:443"
       - "9090:9090" # Prometheus
