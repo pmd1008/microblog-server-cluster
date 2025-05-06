@@ -4,8 +4,9 @@ services:
   microblog:
     image: 10.3.1.10:5050/microblog:latest
     environment:
-      - DATABASE_URL=postgresql://postgres:kaskelen@10.3.1.10:5432/socnet
+      - DATABASE_URL=postgresql://microblog:your_secure_password@10.3.1.10:5432/microblog
       - FLASK_ENV=production
+      - LOG_TO_STDOUT=true
     ports:
       - "5000:5000"
       - "9100:9100" # Порт для метрик Prometheus
@@ -25,8 +26,8 @@ services:
 
   nginx:
     build:
-      context: /home/pmd/nginx-balancer
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: Dockerfile-nginx
     ports:
       - "443:443"
       - "9090:9090" # Prometheus
@@ -41,7 +42,7 @@ services:
   prometheus:
     image: prom/prometheus:latest
     volumes:
-      - /home/pmd/microblog-main/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
     deploy:
       placement:
         constraints:
