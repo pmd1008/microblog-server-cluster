@@ -3,11 +3,15 @@ version: '3.8'
 services:
   microblog:
     image: 10.3.1.10:5050/microblog:latest
+    environment:
+      - DATABASE_URL=postgresql://postgres:kaskelen@10.3.1.10:5432/socnet
+      - FLASK_ENV=production
     ports:
-      - "5000:5000"   
+      - "5000:5000"
+      - "9100:9100" # Порт для метрик Prometheus
     deploy:
       mode: replicated
-      replicas: 3 
+      replicas: 3
       placement:
         constraints:
           - node.role != manager
@@ -16,6 +20,44 @@ services:
         delay: 10s
       restart_policy:
         condition: on-failure
+    networks:
+      - microblog-net
+
+  nginx:
+    build:
+      context: /home/pmd/nginx-balancer
+      dockerfile: Dockerfile
+    ports:
+      - "443:443"
+      - "9090:9090" # Prometheus
+      - "3000:3000" # Grafana
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+    networks:
+      - microblog-net
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - /home/pmd/microblog-main/prometheus.yml:/etc/prometheus/prometheus.yml
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+    networks:
+      - microblog-net
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
     networks:
       - microblog-net
 

@@ -40,3 +40,4 @@ Werkzeug==3.0.1
 WTForms
 psycopg2-binary
 gunicorn
+prometheus-flask-exporter
