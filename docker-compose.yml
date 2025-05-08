@@ -9,7 +9,7 @@ services:
       - LOG_TO_STDOUT=true
     ports:
       - "5000:5000"
-      - "9100:9100" # Порт для метрик Prometheus
+      - "9100:9100"
     deploy:
       mode: replicated
       replicas: 3
@@ -32,6 +32,8 @@ services:
           - node.role == manager
     networks:
       - microblog-net
+    volumes:
+      - prometheus-data:/prometheus  # Том для Prometheus
 
   grafana:
     image: grafana/grafana:latest
@@ -44,13 +46,15 @@ services:
           - node.role == manager
     networks:
       - microblog-net
+    volumes:
+      - grafana-data:/var/lib/grafana  # Том для Grafana
 
   nginx:
     image: 10.3.1.10:5050/nginx:latest
     ports:
       - "443:443"
-      - "9090:9090" # Prometheus
-      - "3000:3000" # Grafana
+      - "9090:9090"
+      - "3000:3000"
     depends_on:
       - microblog
       - prometheus
@@ -65,3 +69,7 @@ services:
 networks:
   microblog-net:
     driver: overlay
+
+volumes:
+  grafana-data:  # Определение тома для Grafana
+  prometheus-data:  # Определение тома для Prometheus
