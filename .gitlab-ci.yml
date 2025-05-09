@@ -2,27 +2,36 @@ stages:
   - build
   - deploy
 
+variables:
+  REGISTRY_URL: $REGISTRY_URL
+
 build_image:
   stage: build
-  image: docker:20.10.16
+  image: docker:latest
   script:
-    - docker build -t 10.3.1.10:5050/microblog:latest .
-    - docker build -f Dockerfile-nginx -t 10.3.1.10:5050/nginx:latest .
-    - docker build -f Dockerfile-prometheus -t 10.3.1.10:5050/prometheus:latest .
-    - docker push 10.3.1.10:5050/microblog:latest
-    - docker push 10.3.1.10:5050/nginx:latest
-    - docker push 10.3.1.10:5050/prometheus:latest
+    - export $(cat .env | xargs)
+    - docker build -t ${REGISTRY_URL}/microblog:latest .
+    - docker build -f Dockerfile-nginx -t ${REGISTRY_URL}/nginx:latest .
+    - docker build -f Dockerfile-prometheus -t ${REGISTRY_URL}/prometheus:latest .
+    - docker push ${REGISTRY_URL}/microblog:latest
+    - docker push ${REGISTRY_URL}/nginx:latest
+    - docker push ${REGISTRY_URL}/prometheus:latest
   tags:
     - docker
   only:
-    - cluster-stack
+    - main
 
 deploy_to_swarm:
   stage: deploy
   image: docker:20.10.16
   script:
+    - export $(cat .env | xargs)
+    - docker service ps microblog-stack_web || echo "Service not yet deployed"
+    - docker exec $(docker ps -q -f name=microblog-stack_web) flask db init || true
+    - docker exec $(docker ps -q -f name=microblog-stack_web) flask db migrate
+    - docker exec $(docker ps -q -f name=microblog-stack_web) flask db upgrade
     - docker stack deploy -c docker-compose.yml microblog-stack
   tags:
     - docker
   only:
-    - cluster-stack
+    - main

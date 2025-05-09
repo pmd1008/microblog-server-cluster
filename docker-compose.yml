@@ -2,16 +2,17 @@ version: '3.8'
 
 services:
   microblog:
-    image: 10.3.1.10:5050/microblog:latest
+    image: ${REGISTRY_URL}/microblog:latest
     environment:
-      - DATABASE_URL=postgresql://postgres:kaskelen@10.3.1.10:5432/socnet
-      - FLASK_ENV=production
-      - LOG_TO_STDOUT=true
+      - DATABASE_URL=${DATABASE_URL}
+      - FLASK_ENV=${FLASK_ENV}
+      - SECRET_KEY=${SECRET_KEY}
+      - LOG_TO_STDOUT=${LOG_TO_STDOUT}
     ports:
       - "5000:5000"
       - "9100:9100"
     deploy:
-      mode: global  # Изменено с replicated на global для запуска одной реплики на каждой worker-ноде
+      mode: global
       placement:
         constraints:
           - node.role != manager
@@ -24,7 +25,7 @@ services:
       - microblog-net
 
   prometheus:
-    image: 10.3.1.10:5050/prometheus:latest
+    image: ${REGISTRY_URL}/prometheus:latest
     deploy:
       placement:
         constraints:
@@ -32,13 +33,13 @@ services:
     networks:
       - microblog-net
     volumes:
-      - prometheus-data:/prometheus  # Том для Prometheus
+      - prometheus-data:/prometheus
 
   grafana:
     image: grafana/grafana:latest
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD}
     deploy:
       placement:
         constraints:
@@ -46,10 +47,10 @@ services:
     networks:
       - microblog-net
     volumes:
-      - grafana-data:/var/lib/grafana  # Том для Grafana
+      - grafana-data:/var/lib/grafana
 
   nginx:
-    image: 10.3.1.10:5050/nginx:latest
+    image: ${REGISTRY_URL}/nginx:latest
     ports:
       - "443:443"
       - "9090:9090"
@@ -70,5 +71,5 @@ networks:
     driver: overlay
 
 volumes:
-  grafana-data:  # Определение тома для Grafana
-  prometheus-data:  # Определение тома для Prometheus
+  grafana-data:
+  prometheus-data:
