@@ -11,8 +11,7 @@ services:
       - "5000:5000"
       - "9100:9100"
     deploy:
-      mode: replicated
-      replicas: 3
+      mode: global  # Изменено с replicated на global для запуска одной реплики на каждой worker-ноде
       placement:
         constraints:
           - node.role != manager
