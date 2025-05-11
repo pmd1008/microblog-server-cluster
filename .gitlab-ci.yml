@@ -3,7 +3,7 @@ stages:
   - deploy
 
 variables:
-  REGISTRY_URL: $REGISTRY_URL
+  REGISTRY_URL: registry:5000
 
 build_image:
   stage: build
@@ -27,6 +27,7 @@ deploy_to_swarm:
   script:
     - export $(cat .env | xargs)
     - docker service ps microblog-stack_web || echo "Service not yet deployed"
+    - until docker run --rm --network microblog-net postgres:14 pg_isready -h postgres -U postgres; do echo "Waiting for postgres"; sleep 2; done
     - docker exec $(docker ps -q -f name=microblog-stack_web) flask db init || true
     - docker exec $(docker ps -q -f name=microblog-stack_web) flask db migrate
     - docker exec $(docker ps -q -f name=microblog-stack_web) flask db upgrade
