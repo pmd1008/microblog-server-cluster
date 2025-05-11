@@ -4,7 +4,7 @@ services:
   microblog:
     image: ${REGISTRY_URL}/microblog:latest
     environment:
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=postgresql://postgres:microblog@postgres:5432/microblog
       - FLASK_ENV=${FLASK_ENV}
       - SECRET_KEY=${SECRET_KEY}
       - LOG_TO_STDOUT=${LOG_TO_STDOUT}
@@ -23,6 +23,8 @@ services:
         condition: on-failure
     networks:
       - microblog-net
+    depends_on:
+      - postgres
 
   prometheus:
     image: ${REGISTRY_URL}/prometheus:latest
@@ -66,6 +68,40 @@ services:
     networks:
       - microblog-net
 
+  registry:
+    image: registry:2
+    ports:
+      - "5001:5000"
+    environment:
+      - REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY=/var/lib/registry
+    volumes:
+      - registry-data:/var/lib/registry
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+    networks:
+      - microblog-net
+
+  postgres:
+    image: postgres:14
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=microblog
+      - POSTGRES_DB=microblog
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+    networks:
+      - microblog-net
+
 networks:
   microblog-net:
     driver: overlay
@@ -73,3 +109,5 @@ networks:
 volumes:
   grafana-data:
   prometheus-data:
+  registry-data:
+  postgres-data:
