@@ -9,7 +9,8 @@ build_image:
   stage: build
   image: docker:latest
   script:
-    - export $(cat .env | xargs)
+    - test -f .env || { echo ".env file not found"; exit 1; }
+    - export $(grep -v '^#' .env | grep -v '^$' | xargs)
     - docker build -t ${REGISTRY_URL}/microblog:latest .
     - docker build -f Dockerfile-nginx -t ${REGISTRY_URL}/nginx:latest .
     - docker build -f Dockerfile-prometheus -t ${REGISTRY_URL}/prometheus:latest .
@@ -23,15 +24,18 @@ build_image:
 
 deploy_to_swarm:
   stage: deploy
-  image: docker:20.10.16
+  image: docker:latest
   script:
-    - export $(cat .env | xargs)
-    - docker service ps microblog-stack_web || echo "Service not yet deployed"
-    - until docker run --rm --network microblog-net postgres:14 pg_isready -h postgres -U postgres; do echo "Waiting for postgres"; sleep 2; done
-    - docker exec $(docker ps -q -f name=microblog-stack_web) flask db init || true
-    - docker exec $(docker ps -q -f name=microblog-stack_web) flask db migrate
-    - docker exec $(docker ps -q -f name=microblog-stack_web) flask db upgrade
+    - test -f .env || { echo ".env file not found"; exit 1; }
+    - export $(grep -v '^#' .env | grep -v '^$' | xargs)
+    - docker service ps microblog-stack_microblog || echo "Service not yet deployed"
+    - until docker run --rm --network microblog-stack_microblog-net postgres:14 pg_isready -h postgres -U postgres; do echo "Waiting for postgres"; sleep 2; done
+    - docker exec $(docker ps -q -f name=microblog-stack_microblog | head -n1) flask db init || true
+    - docker exec $(docker ps -q -f name=microblog-stack_microblog | head -n1) flask db migrate
+    - docker exec $(docker ps -q -f name=microblog-stack_microblog | head -n1) flask db upgrade
     - docker stack deploy -c docker-compose.yml microblog-stack
+    - sleep 10
+    - docker service ls --format "{{.Name}} {{.Replicas}}" | grep microblog-stack | awk '{if ($2 !~ /.*\/.*/) {print $1 " is not running"; exit 1}}'
   tags:
     - docker
   only:

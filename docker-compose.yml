@@ -57,6 +57,8 @@ services:
       - "443:443"
       - "9090:9090"
       - "3000:3000"
+    environment:
+      - MANAGER_IP=${MANAGER_IP}
     depends_on:
       - microblog
       - prometheus
@@ -101,6 +103,22 @@ services:
         condition: on-failure
     networks:
       - microblog-net
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter
+    environment:
+      - DATA_SOURCE_NAME=postgresql://postgres:microblog@postgres:5432/microblog?sslmode=disable
+    networks:
+      - microblog-net
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
 
 networks:
   microblog-net:
