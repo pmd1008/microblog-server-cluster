@@ -20,3 +20,19 @@
 
 
 самый первый набросок
+
+
+
+
+
+
+Генерация SSL-сертификатов для Nginx
+
+Для включения HTTPS в Nginx нужно создать SSL-сертификаты.
+Сгенерируйте самоподписанный сертификат и ключ:
+
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout nginx.key -out nginx.crt \
+  -subj "/C=RU/ST=State/L=City/O=Organization/OU=Unit/CN=localhost"
+
+Это создаст файлы nginx.crt и nginx.key, действительные 365 дней.

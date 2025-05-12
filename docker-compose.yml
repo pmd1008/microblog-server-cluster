@@ -13,9 +13,6 @@ services:
       - "9100:9100"
     deploy:
       mode: global
-      placement:
-        constraints:
-          - node.role != manager
       update_config:
         parallelism: 1
         delay: 10s
@@ -86,6 +83,8 @@ services:
         condition: on-failure
     networks:
       - microblog-net
+    # Only start registry if ENABLE_REGISTRY is true
+    condition: ${ENABLE_REGISTRY:-true} == true ? service_started :service_completed_successfully
 
   postgres:
     image: postgres:14
