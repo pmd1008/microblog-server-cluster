@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# Проверяем наличие Docker
+if ! command -v docker &> /dev/null; then
+    echo "Ошибка: Docker не установлен. Установите Docker и попробуйте снова."
+    exit 1
+fi
+
 # Проверяем наличие .env
 if [ ! -f .env ]; then
     echo "Ошибка: Файл .env не найден. Скопируйте exapmle.env в .env и настройте переменные."
@@ -14,27 +20,6 @@ set +a
 # Проверяем наличие MANAGER_IP
 if [ -z "$MANAGER_IP" ]; then
     echo "Ошибка: MANAGER_IP не указан в .env."
-    exit 1
-fi
-
-# Удаляем существующий Docker
-echo "Удаление существующего Docker..."
-sudo systemctl stop docker.socket docker.service || true
-sudo dnf -y remove docker docker-client docker-client-latest docker-common docker-compose docker-logrotate docker-selinux docker-engine-selinux docker-engine || true
-sudo rm -rf /var/lib/docker /var/run/docker.sock
-sudo dnf -y autoremove
-
-# Устанавливаем Docker с нуля
-echo "Установка Docker..."
-sudo dnf -y install dnf-plugins-core
-sudo dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-sudo dnf -y install docker-ce docker-ce-cli containerd.io
-sudo systemctl enable docker
-sudo systemctl start docker
-
-# Проверяем, установлен ли Docker
-if ! command -v docker &> /dev/null; then
-    echo "Ошибка: Docker не установлен."
     exit 1
 fi
 
