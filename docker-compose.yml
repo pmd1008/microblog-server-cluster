@@ -83,8 +83,6 @@ services:
         condition: on-failure
     networks:
       - microblog-net
-    # Only start registry if ENABLE_REGISTRY is true
-    condition: ${ENABLE_REGISTRY:-true} == true ? service_started :service_completed_successfully
 
   postgres:
     image: postgres:14
