@@ -1,32 +1,24 @@
 #!/bin/bash
 
 # Автоматизация развертывания Docker Swarm кластера для microblog
-# Запуск реестра через Docker Compose, остальной стек в Swarm
-# Работает на Fedora/CentOS
+# Требует предустановленного Docker и docker-compose
 
-set -e # Прерывать выполнение при любой ошибке
+set -euo pipefail
 
 echo "Начало выполнения скрипта: $(date)"
 
-# Шаг 0: Проверка и установка Docker
-if ! command -v docker >/dev/null 2>&1 || ! docker --version >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then
-    echo "Docker или docker compose не установлены, устанавливаем..."
-    # Удаление старых версий Docker, если есть
-    sudo dnf remove -y docker docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-selinux docker-engine-selinux docker-engine || true
-    # Добавление официального репозитория Docker
-    sudo dnf -y install dnf-plugins-core
-    sudo dnf config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo
-    # Установка Docker Engine и Docker Compose плагина
-    sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-    # Запуск и включение Docker
-    sudo systemctl start docker
-    sudo systemctl enable docker
-    # Проверка установки
-    if ! docker --version >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then
-        echo "Ошибка: Не удалось установить или запустить Docker"
-        exit 1
-    fi
-    echo "Docker и docker compose успешно установлены"
+# Проверка наличия Docker
+if ! command -v docker >/dev/null || ! docker --version >/dev/null; then
+    echo "Ошибка: Docker не установлен или не работает"
+    echo "Пожалуйста, установите Docker вручную перед запуском скрипта"
+    exit 1
+fi
+
+# Проверка docker compose
+if ! docker compose version >/dev/null; then
+    echo "Ошибка: Docker Compose Plugin не установлен"
+    echo "Установите его командой: sudo dnf install docker-compose-plugin"
+    exit 1
 fi
 
 # Шаг 1: Проверка конфиг файла
@@ -43,41 +35,67 @@ if [ -z "$MANAGER_IP" ]; then
     echo "Ошибка: MANAGER_IP не задан в .env"
     exit 1
 fi
-# Проверка рабочего ip
-if ! echo "$MANAGER_IP" | grep -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$|^[a-zA-Z0-9][a-zA-Z0-9.-]+[a-zA-Z0-9]$' > /dev/null; then
-    echo "Ошибка: MANAGER_IP ($MANAGER_IP) не является валидным IP-адресом или hostname"
+
+if ! echo "$MANAGER_IP" | grep -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$|^[a-zA-Z0-9][a-zA-Z0-9.-]+[a-zA-Z0-9]$' >/dev/null; then
+    echo "Ошибка: Неверный формат MANAGER_IP ($MANAGER_IP)"
     exit 1
 fi
 
-# Переменные
+# Основные переменные
 REGISTRY_URL="${MANAGER_IP}:5001"
 COMPOSE_FILE="docker-compose.yml"
 REGISTRY_COMPOSE_FILE="docker-compose-registry.yml"
 STACK_NAME="microblog"
 DAEMON_JSON="/etc/docker/daemon.json"
 
-# Проверка наличия docker-compose-registry.yml
-if [ ! -f "$REGISTRY_COMPOSE_FILE" ]; then
-    echo "Ошибка: Файл $REGISTRY_COMPOSE_FILE не найден"
+# Проверка файлов конфигурации
+for file in "$COMPOSE_FILE" "$REGISTRY_COMPOSE_FILE"; do
+    if [ ! -f "$file" ]; then
+        echo "Ошибка: Файл $file не найден"
+        exit 1
+    fi
+done
+
+# Шаг 2: Улучшенная проверка и инициализация Swarm
+echo "Проверяем состояние Docker Swarm..."
+
+SWARM_STATUS=$(docker info --format '{{.Swarm.LocalNodeState}}' 2>/dev/null || true)
+
+case "$SWARM_STATUS" in
+    "active")
+        # Проверяем, является ли узел менеджером
+        if docker node ls &>/dev/null; then
+            echo "Swarm уже активен, текущий узел является менеджером"
+        else
+            echo "Ошибка: Узел не является менеджером Swarm"
+            echo "1. Если хотите пересоздать Swarm, выполните: docker swarm leave --force"
+            echo "2. Затем запустите скрипт снова"
+            exit 1
+        fi
+        ;;
+    "inactive"|"")
+        echo "Инициализируем новый Swarm кластер..."
+        docker swarm init --advertise-addr "$MANAGER_IP" || {
+            echo "Ошибка при инициализации Swarm"
+            exit 1
+        }
+        ;;
+    *)
+        echo "Неизвестное состояние Swarm: $SWARM_STATUS"
+        exit 1
+        ;;
+esac
+
+# Получение токена для worker-нод
+WORKER_TOKEN=$(docker swarm join-token -q worker 2>/dev/null || true)
+if [ -z "$WORKER_TOKEN" ]; then
+    echo "Ошибка: Не удалось получить токен для присоединения worker-нод"
     exit 1
 fi
 
-# Шаг 2: Создание Docker Swarm
-echo "Проверяем/инициализируем Docker Swarm..."
-if ! docker info --format '{{.Swarm.LocalNodeState}}' | grep -q "active"; then
-    docker swarm init --advertise-addr "$MANAGER_IP" || {
-        echo "Ошибка при инициализации Swarm"
-        exit 1
-    }
-    echo "Swarm инициализирован"
-else
-    echo "Swarm уже активен"
-fi
-
-# Вывод команды для присоединения воркер-нод
-WORKER_TOKEN=$(docker swarm join-token -q worker)
-echo "Команда для присоединения воркер-нод:"
+echo "Команда для присоединения worker-нод:"
 echo "docker swarm join --token $WORKER_TOKEN $MANAGER_IP:2377"
+
 
 # Шаг 3: Генерация самоподписанных ключей для Nginx
 echo "Генерируем SSL-ключи для Nginx..."
