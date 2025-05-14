@@ -6,7 +6,30 @@
 
 set -e # Прерывать выполнение при любой ошибке
 
-# Проверка наличия .env
+echo "Начало выполнения скрипта: $(date)"
+
+# Шаг 0: Проверка и установка Docker
+if ! command -v docker >/dev/null 2>&1 || ! docker --version >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then
+    echo "Docker или docker compose не установлены, устанавливаем..."
+    # Удаление старых версий Docker, если есть
+    sudo dnf remove -y docker docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-selinux docker-engine-selinux docker-engine || true
+    # Добавление официального репозитория Docker
+    sudo dnf -y install dnf-plugins-core
+    sudo dnf config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo
+    # Установка Docker Engine и Docker Compose плагина
+    sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+    # Запуск и включение Docker
+    sudo systemctl start docker
+    sudo systemctl enable docker
+    # Проверка установки
+    if ! docker --version >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then
+        echo "Ошибка: Не удалось установить или запустить Docker"
+        exit 1
+    fi
+    echo "Docker и docker compose успешно установлены"
+fi
+
+# Шаг 1: Проверка конфиг файла
 if [ ! -f ".env" ]; then
     echo "Ошибка: Файл .env не найден"
     exit 1
@@ -20,8 +43,13 @@ if [ -z "$MANAGER_IP" ]; then
     echo "Ошибка: MANAGER_IP не задан в .env"
     exit 1
 fi
+# Проверка рабочего ip
+if ! echo "$MANAGER_IP" | grep -E '^([0-9]{1,3}\.){3}[0-9]{1,3}$|^[a-zA-Z0-9][a-zA-Z0-9.-]+[a-zA-Z0-9]$' > /dev/null; then
+    echo "Ошибка: MANAGER_IP ($MANAGER_IP) не является валидным IP-адресом или hostname"
+    exit 1
+fi
 
-# Настройки
+# Переменные
 REGISTRY_URL="${MANAGER_IP}:5001"
 COMPOSE_FILE="docker-compose.yml"
 REGISTRY_COMPOSE_FILE="docker-compose-registry.yml"
@@ -34,7 +62,7 @@ if [ ! -f "$REGISTRY_COMPOSE_FILE" ]; then
     exit 1
 fi
 
-# Шаг 1: Инициализация Docker Swarm
+# Шаг 2: Создание Docker Swarm
 echo "Проверяем/инициализируем Docker Swarm..."
 if ! docker info --format '{{.Swarm.LocalNodeState}}' | grep -q "active"; then
     docker swarm init --advertise-addr "$MANAGER_IP" || {
@@ -51,10 +79,10 @@ WORKER_TOKEN=$(docker swarm join-token -q worker)
 echo "Команда для присоединения воркер-нод:"
 echo "docker swarm join --token $WORKER_TOKEN $MANAGER_IP:2377"
 
-# Шаг 2: Генерация самоподписанных ключей для Nginx
+# Шаг 3: Генерация самоподписанных ключей для Nginx
 echo "Генерируем SSL-ключи для Nginx..."
 if [ -f "nginx.crt" ] && [ -f "nginx.key" ]; then
-    echo "Ключи уже существуют, пропускаем"
+    echo "Ключи уже существуют, используются в данном запуске"
 else
     openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
         -keyout nginx.key -out nginx.crt -subj "/CN=$MANAGER_IP" || {
@@ -63,7 +91,50 @@ else
     }
 fi
 
-# Шаг 3: Запуск Docker-реестра через Docker Compose
+# Шаг 4: Настройка /etc/docker/daemon.json, для http доступа 
+echo "Настраиваем $DAEMON_JSON для HTTP-реестра..."
+NEED_DOCKER_RESTART=0
+if [ -f "$DAEMON_JSON" ]; then
+    # Файл существует, проверяем наличие insecure-registries
+    if ! jq '.["insecure-registries"] | contains(["'"$REGISTRY_URL"'"])' "$DAEMON_JSON" | grep -q "true"; then
+        jq '.["insecure-registries"] += ["'"$REGISTRY_URL"'"]' "$DAEMON_JSON" > /tmp/daemon.json && \
+        mv -f /tmp/daemon.json "$DAEMON_JSON" || {
+            echo "Ошибка при обновлении $DAEMON_JSON"
+            exit 1
+        }
+        NEED_DOCKER_RESTART=1
+        echo "Добавлен $REGISTRY_URL в $DAEMON_JSON"
+    else
+        echo "Реестр $REGISTRY_URL уже в $DAEMON_JSON"
+    fi
+else
+    # Файл не существует, создаём
+    mkdir -p /etc/docker
+    echo '{"insecure-registries": ["'"$REGISTRY_URL"'"]}' > "$DAEMON_JSON" || {
+        echo "Ошибка при создании $DAEMON_JSON"
+        exit 1
+    }
+    NEED_DOCKER_RESTART=1
+    echo "Создан $DAEMON_JSON с $REGISTRY_URL"
+fi
+
+# Перезапуск Docker, только если daemon.json изменён
+if [ "$NEED_DOCKER_RESTART" -eq 1 ]; then
+    echo "Перезапускаем Docker: $(date)"
+    systemctl restart docker || {
+        echo "Ошибка при перезапуске Docker"
+        exit 1
+    }
+    # Проверка, что Swarm всё ещё активен
+    if ! docker info --format '{{.Swarm.LocalNodeState}}' | grep -q "active"; then
+        echo "Ошибка: Swarm неактивен после перезапуска Docker"
+        exit 1
+    fi
+else
+    echo "Перезапуск Docker не требуется"
+fi
+
+# Шаг 5: Запуск Docker-реестра через Docker Compose
 echo "Запускаем Docker-реестр через Docker Compose..."
 docker compose -f "$REGISTRY_COMPOSE_FILE" up -d || {
     echo "Ошибка при запуске реестра"
@@ -78,57 +149,7 @@ until curl -s "http://$REGISTRY_URL/v2/" | grep -q "{}"; do
 done
 echo "Реестр доступен"
 
-# Шаг 4: Настройка /etc/docker/daemon.json
-echo "Настраиваем $DAEMON_JSON для HTTP-реестра..."
-if [ -f "$DAEMON_JSON" ]; then
-    # Файл существует, добавляем insecure-registries
-    if ! jq '.["insecure-registries"] | contains(["'$REGISTRY_URL'"])' "$DAEMON_JSON" | grep -q "true"; then
-        jq '.["insecure-registries"] += ["'$REGISTRY_URL'"]' "$DAEMON_JSON" > /tmp/daemon.json && \
-        mv /tmp/daemon.json "$DAEMON_JSON" || {
-            echo "Ошибка при обновлении $DAEMON_JSON"
-            exit 1
-        }
-    else
-        echo "Реестр $REGISTRY_URL уже в $DAEMON_JSON"
-    fi
-else
-    # Файл не существует, создаём
-    mkdir -p /etc/docker
-    echo '{"insecure-registries": ["'$REGISTRY_URL'"]}' > "$DAEMON_JSON" || {
-        echo "Ошибка при создании $DAEMON_JSON"
-        exit 1
-    }
-fi
-
-# Перезапуск Docker
-echo "Перезапускаем Docker..."
-systemctl restart docker || {
-    echo "Ошибка при перезапуске Docker"
-    exit 1
-}
-
-# Проверка, что Swarm всё ещё активен
-if ! docker info --format '{{.Swarm.LocalNodeState}}' | grep -q "active"; then
-    echo "Ошибка: Swarm неактивен после перезапуска Docker"
-    exit 1
-fi
-
-# Перезапуск реестра после перезапуска Docker
-echo "Перезапускаем Docker-реестр после перезапуска Docker..."
-docker compose -f "$REGISTRY_COMPOSE_FILE" up -d || {
-    echo "Ошибка при перезапуске реестра"
-    exit 1
-}
-
-# Повторное ожидание доступности реестра
-echo "Ожидаем доступности реестра на $REGISTRY_URL после перезапуска..."
-until curl -s "http://$REGISTRY_URL/v2/" | grep -q "{}"; do
-    echo "Реестр недоступен, ждём 5 секунд..."
-    sleep 5
-done
-echo "Реестр доступен"
-
-# Шаг 5: Сборка и пуш образов
+# Шаг 6: Сборка и пуш образов
 echo "Собираем и пушим образы в реестр..."
 for IMAGE in "microblog" "nginx" "prometheus"; do
     DOCKERFILE="Dockerfile"
@@ -148,7 +169,7 @@ for IMAGE in "microblog" "nginx" "prometheus"; do
     }
 done
 
-# Шаг 6: Запуск стека в Swarm
+# Шаг 7: Запуск стека в Swarm
 echo "Разворачиваем стек..."
 export REGISTRY_URL
 docker stack deploy -c "$COMPOSE_FILE" "$STACK_NAME" || {
@@ -156,7 +177,7 @@ docker stack deploy -c "$COMPOSE_FILE" "$STACK_NAME" || {
     exit 1
 }
 
-# Шаг 7: Ожидание готовности postgres и миграция базы
+# Шаг 8: Ожидание готовности postgres и миграция базы
 echo "Ожидаем готовности postgres..."
 until docker run --rm --network "${STACK_NAME}_microblog-net" postgres:14 pg_isready -h postgres -U postgres; do
     echo "Postgres недоступен, ждём 2 секунды..."
@@ -172,11 +193,11 @@ fi
 
 docker exec "$CONTAINER_ID" flask db init || true
 docker exec "$CONTAINER_ID" flask db migrate || {
-    echo "Ошибка при миграции базы"
+    echo "Ошибка при миграции базы данных"
     exit 1
 }
 docker exec "$CONTAINER_ID" flask db upgrade || {
-    echo "Ошибка при обновлении базы"
+    echo "Ошибка при обновлении базы данных"
     exit 1
 }
 
