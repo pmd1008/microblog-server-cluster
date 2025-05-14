@@ -1,0 +1,17 @@
+version: '3.8'
+services:
+  registry:
+    image: registry:2
+    ports:
+      - "5001:5000"
+    environment:
+      - REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY=/var/lib/registry
+    volumes:
+      - registry-data:/var/lib/registry
+    networks:
+      - microblog-net
+networks:
+  microblog-net:
+    driver: bridge
+volumes:
+  registry-data:

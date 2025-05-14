@@ -67,23 +67,6 @@ services:
     networks:
       - microblog-net
 
-  registry:
-    image: registry:2
-    ports:
-      - "5001:5000"
-    environment:
-      - REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY=/var/lib/registry
-    volumes:
-      - registry-data:/var/lib/registry
-    deploy:
-      placement:
-        constraints:
-          - node.role == manager
-      restart_policy:
-        condition: on-failure
-    networks:
-      - microblog-net
-
   postgres:
     image: postgres:14
     environment:
@@ -120,6 +103,7 @@ services:
 networks:
   microblog-net:
     driver: overlay
+    attachable: true
 
 volumes:
   grafana-data:
