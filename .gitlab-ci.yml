@@ -3,7 +3,7 @@ stages:
   - deploy
 
 variables:
-  REGISTRY_URL: registry:5000
+  REGISTRY_URL: registry:5001
 
 build_image:
   stage: build
