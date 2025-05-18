@@ -1,0 +1,19 @@
+groups:
+- name: microblog
+  rules:
+  - alert: MicroblogDown
+    expr: up{job="microblog"} == 0
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Microblog не работает"
+      description: "Сервис Microblog не отвечает более 1 минуты."
+  - alert: HighNginxErrors
+    expr: rate(nginx_http_requests_total{status=~"5.."}[5m]) > 0.1
+    for: 1m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Много ошибок Nginx"
+      description: "Nginx возвращает ошибки 5xx со скоростью {{ $value }} req/s."

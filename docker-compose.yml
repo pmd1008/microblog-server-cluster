@@ -8,6 +8,11 @@ services:
       - FLASK_ENV=${FLASK_ENV}
       - SECRET_KEY=${SECRET_KEY}
       - LOG_TO_STDOUT=${LOG_TO_STDOUT}
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://loki:3100/loki/api/v1/push"
+        loki-external-labels: "service=microblog"
     ports:
       - "5000:5000"
       - "9100:9100"
@@ -34,6 +39,13 @@ services:
     volumes:
       - prometheus-data:/prometheus
 
+  loki:
+    image: grafana/loki:latest
+    networks:
+      - microblog-net
+    volumes:
+      - loki-data:/loki
+
   grafana:
     image: grafana/grafana:latest
     environment:
@@ -47,6 +59,8 @@ services:
       - microblog-net
     volumes:
       - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
 
   nginx:
     image: ${REGISTRY_URL}/nginx:latest
@@ -56,16 +70,33 @@ services:
       - "3000:3000"
     environment:
       - MANAGER_IP=${MANAGER_IP}
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://loki:3100/loki/api/v1/push"
+        loki-external-labels: "service=nginx"
     depends_on:
       - microblog
       - prometheus
       - grafana
+      - loki
     deploy:
       placement:
         constraints:
           - node.role == manager
     networks:
       - microblog-net
+
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:latest
+    environment:
+      - NGINX_SCRAPE_URI=http://nginx:9113/stub_status
+    networks:
+      - microblog-net
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
 
   postgres:
     image: postgres:14
@@ -100,6 +131,17 @@ services:
         constraints:
           - node.role == manager
 
+  alertmanager:
+    image: prom/alertmanager:latest
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml
+    networks:
+      - microblog-net
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+
 networks:
   microblog-net:
     driver: overlay
@@ -110,3 +152,4 @@ volumes:
   prometheus-data:
   registry-data:
   postgres-data:
+  loki-data:
