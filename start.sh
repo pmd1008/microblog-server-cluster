@@ -21,6 +21,22 @@ if ! docker compose version >/dev/null; then
     exit 1
 fi
 
+
+
+# Проверка и установка плагина Loki
+echo "Проверяем наличие плагина Loki..."
+if ! docker plugin ls --format '{{.Name}}' | grep -q '^loki$'; then
+    echo "Плагин Loki не установлен. Устанавливаем..."
+    if ! docker plugin install grafana/loki-docker-driver:latest --alias loki --grant-all-permissions 2>/dev/null; then
+        echo "Ошибка: Не удалось установить плагин Loki. Проверьте интернет-соединение или репозиторий плагинов."
+        exit 1
+    fi
+    echo "Плагин Loki успешно установлен."
+else
+    echo "Плагин Loki уже установлен или существует."
+fi
+
+
 # Шаг 1: Проверка конфиг файла
 if [ ! -f ".env" ]; then
     echo "Ошибка: Файл .env не найден"
@@ -227,3 +243,4 @@ docker stack ps "$STACK_NAME" --no-trunc
 echo "Развёртывание завершено!"
 echo "Логи сервисов: docker service logs ${STACK_NAME}_<service_name>"
 echo "Логи реестра: docker compose -f $REGISTRY_COMPOSE_FILE logs registry"
+
